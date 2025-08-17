@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM增量更新实现</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            padding: 30px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+        
+        .content {
+            display: flex;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .panel {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 300px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .panel h2 {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+            color: #2c3e50;
+        }
+        
+        .user-list {
+            list-style: none;
+        }
+        
+        .user-item {
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        
+        .user-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            background: #e3f2fd;
+        }
+        
+        .user-info {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .user-name {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #2c3e50;
+        }
+        
+        .user-email {
+            font-size: 0.9rem;
+            color: #7f8c8d;
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 30px;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 12px 25px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        button:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+        
+        button.add {
+            background: #2ecc71;
+        }
+        
+        button.add:hover {
+            background: #27ae60;
+        }
+        
+        button.update {
+            background: #f39c12;
+        }
+        
+        button.update:hover {
+            background: #d35400;
+        }
+        
+        button.remove {
+            background: #e74c3c;
+        }
+        
+        button.remove:hover {
+            background: #c0392b;
+        }
+        
+        .diff-view {
+            background: #2c3e50;
+            color: white;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            min-height: 150px;
+            margin-top: 20px;
+        }
+        
+        .diff-added {
+            background: rgba(46, 204, 113, 0.3);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        .diff-removed {
+            background: rgba(231, 76, 60, 0.3);
+            padding: 2px 4px;
+            border-radius: 3px;
+            text-decoration: line-through;
+        }
+        
+        .diff-updated {
+            background: rgba(243, 156, 18, 0.3);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        
+        .stat-value {
+            color: #3498db;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <div class="card">
+            <header>
+                <h1>DOM增量更新实现</h1>
+                <p class="subtitle">手动实现虚拟DOM与增量更新算法</p>
+            </header>
+            
+            <div class="content">
+                <div class="panel">
+                    <h2>用户列表</h2>
+                    <ul id="userList" class="user-list"></ul>
+                    
+                    <div class="stats">
+                        <div>DOM操作次数: <span id="domOperations" class="stat-value">0</span></div>
+                        <div>渲染时间: <span id="renderTime" class="stat-value">0ms</span></div>
+                        <div>更新节点数: <span id="updatedNodes" class="stat-value">0</span></div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h2>更新详情</h2>
+                    <div id="diffView" class="diff-view"></div>
+                    
+                    <div class="controls">
+                        <button class="add" onclick="addUser()">
+                            <span>+</span> 添加用户
+                        </button>
+                        <button class="update" onclick="updateRandomUser()">
+                            <span>↻</span> 更新随机用户
+                        </button>
+                        <button class="remove" onclick="removeRandomUser()">
+                            <span>×</span> 删除随机用户
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 用户数据模型
+        let users = [
+            { id: 1, name: '张三', email: 'zhangsan@example.com' },
+            { id: 2, name: '李四', email: 'lisi@example.com' },
+            { id: 3, name: '王五', email: 'wangwu@example.com' },
+            { id: 4, name: '赵六', email: 'zhaoliu@example.com' }
+        ];
+        
+        // 性能统计
+        let stats = {
+            domOperations: 0,
+            lastRenderTime: 0,
+            updatedNodes: 0
+        };
+        
+        // 当前DOM状态
+        let currentDOMState = [];
+        
+        // 更新DOM操作统计
+        function updateStats() {
+            document.getElementById('domOperations').textContent = stats.domOperations;
+            document.getElementById('renderTime').textContent = `${stats.lastRenderTime}ms`;
+            document.getElementById('updatedNodes').textContent = stats.updatedNodes;
+        }
+        
+        // 创建用户列表项的虚拟DOM
+        function createUserItem(user) {
+            return {
+                type: 'li',
+                id: `user-${user.id}`,
+                className: 'user-item',
+                children: [
+                    {
+                        type: 'div',
+                        className: 'user-info',
+                        children: [
+                            { type: 'div', className: 'user-name', text: user.name },
+                            { type: 'div', className: 'user-email', text: user.email }
+                        ]
+                    },
+                    {
+                        type: 'button',
+                        text: '删除',
+                        className: 'remove-btn',
+                        onClick: () => removeUser(user.id)
+                    }
+                ]
+            };
+        }
+        
+        // 生成整个用户列表的虚拟DOM
+        function generateVirtualDOM() {
+            return {
+                type: 'ul',
+                id: 'userList',
+                className: 'user-list',
+                children: users.map(createUserItem)
+            };
+        }
+        
+        // 创建真实DOM元素
+        function createElement(vnode) {
+            if (typeof vnode === 'string') return document.createTextNode(vnode);
+            
+            const el = document.createElement(vnode.type);
+            
+            // 设置属性
+            if (vnode.id) el.id = vnode.id;
+            if (vnode.className) el.className = vnode.className;
+            if (vnode.text) el.textContent = vnode.text;
+            
+            // 设置事件
+            if (vnode.onClick) {
+                el.addEventListener('click', vnode.onClick);
+            }
+            
+            // 添加子元素
+            if (vnode.children) {
+                vnode.children.forEach(child => {
+                    el.appendChild(createElement(child));
+                });
+            }
+            
+            return el;
+        }
+        
+        // 比较两个虚拟DOM节点
+        function diffNodes(oldNode, newNode) {
+            const patches = [];
+            
+            // 节点类型不同 - 替换整个节点
+            if (oldNode.type !== newNode.type) {
+                patches.push({ type: 'REPLACE', node: newNode });
+                return patches;
+            }
+            
+            // 文本内容不同 - 更新文本
+            if (oldNode.text !== newNode.text) {
+                patches.push({ type: 'TEXT', value: newNode.text });
+            }
+            
+            // 属性不同 - 更新属性
+            const attrPatches = {};
+            if (oldNode.className !== newNode.className) {
+                attrPatches.className = newNode.className;
+            }
+            if (oldNode.id !== newNode.id) {
+                attrPatches.id = newNode.id;
+            }
+            
+            if (Object.keys(attrPatches).length > 0) {
+                patches.push({ type: 'ATTR', attrs: attrPatches });
+            }
+            
+            // 比较子节点
+            const childPatches = diffChildren(oldNode.children || [], newNode.children || []);
+            if (childPatches.length > 0) {
+                patches.push({ type: 'CHILDREN', patches: childPatches });
+            }
+            
+            return patches;
+        }
+        
+        // 比较子节点列表
+        function diffChildren(oldChildren, newChildren) {
+            const patches = [];
+            const length = Math.max(oldChildren.length, newChildren.length);
+            
+            for (let i = 0; i < length; i++) {
+                // 新节点存在而旧节点不存在 - 添加新节点
+                if (!oldChildren[i] && newChildren[i]) {
+                    patches.push({ type: 'ADD', node: newChildren[i], index: i });
+                }
+                // 旧节点存在而新节点不存在 - 移除节点
+                else if (oldChildren[i] && !newChildren[i]) {
+                    patches.push({ type: 'REMOVE', index: i });
+                }
+                // 节点都存在 - 递归比较
+                else if (oldChildren[i] && newChildren[i]) {
+                    const nodePatches = diffNodes(oldChildren[i], newChildren[i]);
+                    if (nodePatches.length > 0) {
+                        patches.push({ type: 'UPDATE', index: i, patches: nodePatches });
+                    }
+                }
+            }
+            
+            return patches;
+        }
+        
+        // 应用差异更新到真实DOM
+        function applyPatches(parent, patches) {
+            stats.updatedNodes = 0;
+            const diffLog = [];
+            
+            patches.forEach(patch => {
+                switch (patch.type) {
+                    case 'REPLACE':
+                        const newNode = createElement(patch.node);
+                        parent.replaceChild(newNode, parent.firstChild);
+                        stats.domOperations++;
+                        stats.updatedNodes++;
+                        diffLog.push(`<span class="diff-updated">替换节点 ${patch.node.id || patch.node.type}</span>`);
+                        break;
+                        
+                    case 'TEXT':
+                        parent.firstChild.textContent = patch.value;
+                        stats.domOperations++;
+                        stats.updatedNodes++;
+                        diffLog.push(`<span class="diff-updated">更新文本: ${patch.value}</span>`);
+                        break;
+                        
+                    case 'ATTR':
+                        Object.entries(patch.attrs).forEach(([key, value]) => {
+                            parent.firstChild[key] = value;
+                        });
+                        stats.domOperations++;
+                        stats.updatedNodes++;
+                        diffLog.push(`<span class="diff-updated">更新属性: ${Object.keys(patch.attrs).join(', ')}</span>`);
+                        break;
+                        
+                    case 'ADD':
+                        const newChild = createElement(patch.node);
+                        if (parent.children[patch.index]) {
+                            parent.insertBefore(newChild, parent.children[patch.index]);
+                        } else {
+                            parent.appendChild(newChild);
+                        }
+                        stats.domOperations++;
+                        stats.updatedNodes++;
+                        diffLog.push(`<span class="diff-added">添加节点 ${patch.node.id || patch.node.type}</span>`);
+                        break;
+                        
+                    case 'REMOVE':
+                        const childToRemove = parent.children[patch.index];
+                        parent.removeChild(childToRemove);
+                        stats.domOperations++;
+                        stats.updatedNodes++;
+                        diffLog.push(`<span class="diff-removed">删除节点</span>`);
+                        break;
+                        
+                    case 'UPDATE':
+                        applyPatches(parent.children[patch.index], patch.patches);
+                        break;
+                }
+            });
+            
+            document.getElementById('diffView').innerHTML = diffLog.join('\n');
+        }
+        
+        // 增量更新DOM
+        function updateDOM() {
+            const startTime = performance.now();
+            
+            // 生成新的虚拟DOM
+            const newVirtualDOM = generateVirtualDOM();
+            
+            // 计算差异
+            const patches = diffNodes(currentDOMState, newVirtualDOM);
+            
+            // 应用差异更新
+            const userList = document.getElementById('userList');
+            applyPatches(userList, patches);
+            
+            // 更新当前DOM状态
+            currentDOMState = newVirtualDOM;
+            
+            // 更新性能统计
+            stats.lastRenderTime = Math.round(performance.now() - startTime);
+            updateStats();
+        }
+        
+        // 初始化
+        function init() {
+            const userList = document.getElementById('userList');
+            currentDOMState = generateVirtualDOM();
+            userList.appendChild(createElement(currentDOMState));
+            updateStats();
+        }
+        
+        // 用户操作函数
+        function addUser() {
+            const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
+            const names = ['陈七', '孙八', '周九', '吴十'];
+            const newName = names[Math.floor(Math.random() * names.length)];
+            const newEmail = `${newName.toLowerCase()}@example.com`;
+            
+            users.push({
+                id: newId,
+                name: newName,
+                email: newEmail
+            });
+            
+            updateDOM();
+        }
+        
+        function updateRandomUser() {
+            if (users.length === 0) return;
+            
+            const randomIndex = Math.floor(Math.random() * users.length);
+            const user = users[randomIndex];
+            
+            // 更新用户信息
+            const titles = ['博士', '教授', '工程师', '经理'];
+            const title = titles[Math.floor(Math.random() * titles.length)];
+            
+            // 50%几率只更新名字，50%几率更新邮箱
+            if (Math.random() > 0.5) {
+                user.name = `${title} ${user.name}`;
+            } else {
+                const domains = ['company.com', 'organization.org', 'institute.edu'];
+                const domain = domains[Math.floor(Math.random() * domains.length)];
+                user.email = user.email.replace('@example.com', `@${domain}`);
+            }
+            
+            updateDOM();
+        }
+        
+        function removeRandomUser() {
+            if (users.length === 0) return;
+            
+            const randomIndex = Math.floor(Math.random() * users.length);
+            users.splice(randomIndex, 1);
+            
+            updateDOM();
+        }
+        
+        function removeUser(id) {
+            users = users.filter(user => user.id !== id);
+            updateDOM();
+        }
+        
+        // 初始化应用
+        window.onload = init;
+    </script>
+</body>
+</html>
