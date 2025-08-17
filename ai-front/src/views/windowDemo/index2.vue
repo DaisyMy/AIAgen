@@ -4,7 +4,6 @@
     <button @click="stopStream" :disabled="!isStreaming">停止</button>
 
     <div class="output-panel">
-      <!-- <div v-html="renderedContent" class="markdown-content"></div>-->
       <VueNodeRenderer
           v-for="(node, index) in renderedContent"
           :key="index"
@@ -21,6 +20,7 @@ import {fetchEventSource} from '@microsoft/fetch-event-source';
 import {marked} from "marked";
 import {parseDocument} from "htmlparser2";
 import DOMPurify from "dompurify";
+import hljs from 'highlight.js';
 import VueNodeRenderer from "@/components/VueNodeRenderer/index.vue";
 
 const content = ref('');
@@ -28,9 +28,25 @@ const isStreaming = ref(false);
 const isLoading = ref(false);
 const controller = ref(null);
 
+
+marked.setOptions({
+  highlight: function (code, lang) {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        return hljs.highlight(code, {language: lang}).value;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return hljs.highlightAuto(code).value;
+  },
+  langPrefix: 'hljs language-',
+  gfm: true,
+  breaks: true
+});
+
 // 渲染 Markdown
 const renderedContent = computed(() => {
-  console.log(parseDocument(DOMPurify.sanitize(marked.parse(accumulatedMarkdown.value))).children)
   return parseDocument(
       DOMPurify.sanitize(marked.parse(accumulatedMarkdown.value))
   ).children;
@@ -95,8 +111,6 @@ const stopStream = () => {
   isLoading.value = false;
 };
 </script>
-
-
 
 
 <style scoped>

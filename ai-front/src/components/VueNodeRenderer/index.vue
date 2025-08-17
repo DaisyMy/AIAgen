@@ -9,19 +9,8 @@
   <!-- 图片节点使用 el-image 组件 -->
 
   <template v-else-if="isImageNode">
-
-    <!--    <el-image-->
-    <!--        :src="node.attribs.src + '?x-oss-process=image/resize,w_400/format,jpg'"-->
-    <!--        :alt="node.attribs.alt || '图片'"-->
-    <!--        :preview-src-list="[node.attribs.src]"-->
-    <!--        preview-teleported-->
-    <!--        class="w-30% block!"-->
-    <!--    />-->
-    <div> img</div>
-
+    <img :src="node.attribs.src" :alt="node.attribs.alt" style="width: 80%;">
   </template>
-
-  <!-- 其他非文本节点渲染对应标签 + 递归子节点 -->
 
   <template v-else>
 
@@ -55,15 +44,16 @@ const props = defineProps({
 
 // 判断是否为图片节点
 const isImageNode = computed(() => {
-  return props.node.tagName?.toLowerCase() === 'img'
+  console.log(props.node?.tagName, props.node)
+  return props.node?.tagName?.toLowerCase() === 'img'
 })
 
 // 计算图片样式（可根据需要调整）
 const imageStyle = computed(() => {
   const style = {}
   // 传递原img标签的宽高属性
-  if (props.node.attribs.width) style.width = props.node.attribs.width
-  if (props.node.attribs.height) style.height = props.node.attribs.height
+  if (props.node?.attribs.width) style.width = props.node.attribs.width
+  if (props.node?.attribs.height) style.height = props.node.attribs.height
   return style
 })
 </script>
