@@ -15,13 +15,16 @@
 </template>
 
 <script setup>
-import {computed, ref} from "vue";
+import {computed, ref, onMounted, getCurrentInstance} from "vue";
 import {fetchEventSource} from '@microsoft/fetch-event-source';
-import {marked} from "marked";
+import markdownIt from "markdown-it"
 import {parseDocument} from "htmlparser2";
 import DOMPurify from "dompurify";
 import hljs from 'highlight.js';
 import VueNodeRenderer from "@/components/VueNodeRenderer/index.vue";
+
+const proxy = getCurrentInstance()
+const mermaid = proxy.mermaid
 
 const content = ref('');
 const isStreaming = ref(false);
@@ -29,26 +32,32 @@ const isLoading = ref(false);
 const controller = ref(null);
 
 
-marked.setOptions({
-  highlight: function (code, lang) {
+const md = new markdownIt({
+  html: true,
+  linkify: true,
+  typographer: true,
+  highlight: function (str, lang) {
+    console.log(lang)
+    if (lang === 'mermaid') {
+      return `<pre class="mermaid">${str}</pre>`
+    }
     if (lang && hljs.getLanguage(lang)) {
       try {
-        return hljs.highlight(code, {language: lang}).value;
-      } catch (e) {
-        console.error(e);
+        return '<pre class="hljs"><code>' +
+            hljs.highlight(str, {language: lang}).value +
+            '</code></pre>';
+      } catch (__) {
       }
     }
-    return hljs.highlightAuto(code).value;
-  },
-  langPrefix: 'hljs language-',
-  gfm: true,
-  breaks: true
-});
+
+    return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
+  }
+})
 
 // 渲染 Markdown
 const renderedContent = computed(() => {
   return parseDocument(
-      DOMPurify.sanitize(marked.parse(accumulatedMarkdown.value))
+      DOMPurify.sanitize(accumulatedMarkdown.value)
   ).children;
 });
 
@@ -82,8 +91,8 @@ const startStream = async () => {
         try {
           const data = JSON.parse(event.data);
           content.value += data.content;
-          // 使用 marked 渲染 Markdown
-          accumulatedMarkdown.value = marked.parse(content.value);
+          // 使用 md 渲染 Markdown
+          accumulatedMarkdown.value = md.render(content.value);
         } catch (e) {
           console.error('Parsing error:', e);
         }
@@ -110,6 +119,7 @@ const stopStream = () => {
   isStreaming.value = false;
   isLoading.value = false;
 };
+
 </script>
 
 

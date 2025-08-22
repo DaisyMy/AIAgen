@@ -16,8 +16,12 @@ const markdownContent = [
     '| 用户增长 | 15% | ↗️ |\n',
     '| 转化率 | 8.2% | → |\n',
     '| 留存率 | 76% | ↗️ |\n\n',
+    '## 图片\n\n',
     '![用户增长趋势图](https://static-prod.ituchong.com/tc-common-fe-static/images/tuchong_pc/8813918b04d5fda89ccb7fe6376162cd.jpeg "用户增长趋势")\n\n',
+    '## 代码块\n\n',
     '```javascript\n// 示例代码\nfunction streamData() {\n  console.log("实时数据流");\n}\n```\n\n',
+    '## mermaid\n\n',
+    '```mermaid\ngraph TD\n    A[Enter Chart Definition] --> B(Preview)\n    B --> C{decide}\n    C --> D[Keep]\n    C --> E[Edit Definition]\n    E --> B\n    D --> F[Save Image and Code]\n    F --> B\n```\n\n',
     '## 分析结论\n\n',
     '> 流式传输技术显著提升用户体验\n',
     '> 响应速度提升 **40%**\n\n',
@@ -36,7 +40,7 @@ app.get('/stream-md', (req, res) => {
     const sendChunk = () => {
         if (index < markdownContent.length) {
             // SSE 格式: data: <content>\n\n
-            res.write(`data: ${JSON.stringify({ content: markdownContent[index] })}\n\n`);
+            res.write(`data: ${JSON.stringify({content: markdownContent[index]})}\n\n`);
 
             // 模拟处理延迟
             const delay = Math.floor(Math.random() * 300) + 100;
